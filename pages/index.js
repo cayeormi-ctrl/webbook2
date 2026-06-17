@@ -36,6 +36,8 @@ const pages = [
   { type: "page", src: "/png/page_28.png" },
   { type: "page", src: "/png/page_29.png" },
   { type: "page", src: "/png/page_30.png" },
+  { type: "page", src: "/png/page_11-1.png" },
+  { type: "page", src: "/png/page_12-1.png" },
   { type: "page", src: "/png/page-31.png" },
   { type: "page", src: "/png/page-32.png" },
   { type: "page", src: "/png/page_33.png" },
@@ -56,10 +58,20 @@ export default function Home() {
   const turningRef = useRef(false);
 
   useEffect(() => {
-    document.body.dataset.atCover = currentIndex === 0 ? "true" : "false";
+    if (document.body) {
+      document.body.dataset.atCover = currentIndex === 0 ? "true" : "false";
+      document.body.dataset.atBack = currentIndex === pages.length - 1 ? "true" : "false";
+      if (pageFlipRef.current) {
+        try {
+          document.body.dataset.orientation = pageFlipRef.current.getOrientation();
+        } catch (e) {
+          // Ignore if render not initialized
+        }
+      }
+    }
   }, [currentIndex]);
 
-  const initBook = (startPage = 1) => {
+  const initBook = (startPage = 0) => {
     if (pageFlipRef.current) {
       pageFlipRef.current.turnToPage(startPage);
       return;
@@ -76,9 +88,6 @@ export default function Home() {
       const pageEl = document.createElement("div");
       pageEl.className = "page";
       pageEl.dataset.page = String(index + 1);
-      if (index === 0 || index === pages.length - 1) {
-        pageEl.dataset.density = "hard";
-      }
       
       pageEl.innerHTML = `<img src="${page.src}" alt="${page.type === "back" ? "Back cover" : page.type === "cover" ? "Cover" : `Page ${index}`}" />`;
       
@@ -106,7 +115,7 @@ export default function Home() {
       swipeDistance: 18,
       flippingTime: 760,
       drawShadow: true,
-      showPageCorners: true
+      showPageCorners: false
     });
 
     pageFlipRef.current = pageFlip;
@@ -114,46 +123,60 @@ export default function Home() {
 
     pageFlip.on("flip", event => setUi(event.data));
     pageFlip.on("init", event => setUi(event.data.page));
+    pageFlip.on("changeOrientation", event => {
+      try {
+        document.body.dataset.orientation = event.data || pageFlip.getOrientation();
+      } catch (e) {
+        console.warn(e);
+      }
+    });
+
     pageFlip.loadFromHTML(book.querySelectorAll(".page"));
+
+    if (document.body) {
+      try {
+        document.body.dataset.orientation = pageFlip.getOrientation();
+      } catch (e) {
+        console.warn(e);
+      }
+    }
   };
 
   const setUi = (index) => {
     setCurrentIndex(index);
-    document.body.dataset.atCover = index === 0 ? "true" : "false";
-    if (index === 0) {
-      document.body.classList.remove("cover-opening");
+    if (document.body) {
+      document.body.dataset.atCover = index === 0 ? "true" : "false";
+      document.body.dataset.atBack = index === pages.length - 1 ? "true" : "false";
+      if (pageFlipRef.current) {
+        try {
+          document.body.dataset.orientation = pageFlipRef.current.getOrientation();
+        } catch (e) {
+          // Ignore if render is not yet initialized
+        }
+      }
     }
   };
+
+  useEffect(() => {
+    if (window.St && window.St.PageFlip) {
+      initBook(0);
+    }
+  }, []);
 
   const goPrev = () => {
     if (turningRef.current) return;
     if (!pageFlipRef.current) return;
     turningRef.current = true;
     pageFlipRef.current.flipPrev("top");
-    window.setTimeout(() => { turningRef.current = false; }, 980);
+    window.setTimeout(() => { turningRef.current = false; }, 760);
   };
 
   const goNext = () => {
     if (turningRef.current) return;
+    if (!pageFlipRef.current) return;
     turningRef.current = true;
-
-    if (currentIndex === 0) {
-      document.body.classList.add("cover-opening");
-      window.setTimeout(() => {
-        document.body.dataset.atCover = "false";
-        initBook(1);
-        document.body.classList.remove("cover-opening");
-        turningRef.current = false;
-      }, 680);
-      return;
-    }
-
-    if (!pageFlipRef.current) {
-      initBook(currentIndex);
-    }
-    
     pageFlipRef.current.flipNext("top");
-    window.setTimeout(() => { turningRef.current = false; }, 980);
+    window.setTimeout(() => { turningRef.current = false; }, 760);
   };
 
   useEffect(() => {
@@ -194,6 +217,7 @@ export default function Home() {
       <Script 
         src="/page-flip.browser.js" 
         strategy="afterInteractive" 
+        onLoad={() => initBook(0)}
       />
 
       <span className="corner-mark a"></span>
@@ -204,12 +228,6 @@ export default function Home() {
       <main className="stage" aria-label="UX Research webbook">
         <section className="book-shell">
           <div id="book" className="book" ref={bookRef}></div>
-          <div className="intro-right-page" aria-hidden="true">
-            <img src="/png/page_01.png" alt="" />
-          </div>
-          <div className="cover-overlay" aria-hidden="true">
-            <img src="/cover.svg" alt="" />
-          </div>
           <button 
             className="arrow prev" 
             id="prevPage"
